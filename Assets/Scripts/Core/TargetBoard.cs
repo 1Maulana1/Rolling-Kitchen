@@ -13,14 +13,14 @@ namespace RollingKitchen
             var gm = GameManager.Instance;
             if (gm == null) return;
             var sb = new StringBuilder();
-            sb.AppendLine($"<b>Hari {gm.Day} dari {gm.TotalDays}</b>   {gm.Config.seasonName}");
+            sb.AppendLine($"<b>Hari {gm.Day} dari {gm.TotalDays}</b>");
             sb.AppendLine();
             sb.AppendLine($"Target poin hari ini: <b>{gm.DailyTarget}</b>");
             for (int i = 0; i < 3; i++)
                 sb.AppendLine($"   Bintang {i + 1}: {Mathf.CeilToInt(gm.DailyTarget * gm.StarThreshold(i))} poin" +
                               (i == 2 ? "  (bonus 10% pendapatan)" : ""));
             sb.AppendLine($"Poin sejauh ini: {gm.TodayPoints}");
-            sb.AppendLine("Poin = pendapatan + 5 per hidangan sempurna - 5 per QTE gagal beruntun.");
+            sb.AppendLine("Poin = pendapatan penjualan hari ini (termasuk tip).");
             sb.AppendLine();
             sb.AppendLine($"Target akhir (hari {gm.TotalDays}): <b>Rp {gm.FinalTarget:N0}</b>   Uangmu: Rp {gm.Money:N0}");
             sb.AppendLine($"Hari gagal (0 bintang): {gm.FailedDays} / maks {gm.MaxFailedDays}");

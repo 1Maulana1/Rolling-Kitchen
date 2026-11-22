@@ -16,9 +16,6 @@ namespace RollingKitchen
         [Min(5f)] public float patienceSeconds;
         [Tooltip("Jeda antar pelanggan baru (detik) saat Malam.")]
         [Min(1f)] public float spawnInterval;
-        public string seasonName;
-        [Tooltip("Pengali harga bahan di Pasar pada hari ini (musim).")]
-        [Min(0.1f)] public float priceMultiplier;
 
         public static DayConfig Default => new DayConfig
         {
@@ -27,8 +24,6 @@ namespace RollingKitchen
             maxCustomers = 3,
             patienceSeconds = 32f,
             spawnInterval = 9f,
-            seasonName = "",
-            priceMultiplier = 1f,
         };
     }
 

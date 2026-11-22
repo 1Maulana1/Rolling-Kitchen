@@ -4,8 +4,8 @@ using UnityEngine;
 namespace RollingKitchen
 {
     /// <summary>
-    /// Satu lapak slot di Pasar. Kategori dagangannya diacak tiap hari oleh Market.CategoryForZone;
-    /// gambar dagangan di meja (dan papan nama, bila ada) ikut diperbarui.
+    /// Satu lapak slot di Pasar. Kategorinya tetap (Market.CategoryForZone); yang berganti tiap hari
+    /// hanya jenis bahan, stok, dan harganya. Gambar dagangan di meja dan papan nama mengikuti kategori.
     /// </summary>
     public class PasarZone : MonoBehaviour
     {
@@ -16,26 +16,14 @@ namespace RollingKitchen
         [Tooltip("Urutan sama dengan IngredientCategory: Sayur, Daging, Ikan, Lainnya.")]
         [SerializeField] private Sprite[] goodsByCategory = new Sprite[4];
 
-        public IngredientCategory Category =>
-            Market.CategoryForZone(zoneIndex, GameManager.Instance != null ? GameManager.Instance.Day : 1);
+        public IngredientCategory Category => Market.CategoryForZone(zoneIndex);
 
         public string Title => $"Pedagang {CategoryName(Category)}";
 
         /// <summary>Nama kategori untuk pemain (Lainnya dijual sebagai bumbu & bahan pokok).</summary>
         public static string CategoryName(IngredientCategory c) => c == IngredientCategory.Lainnya ? "Bumbu" : c.ToString();
 
-        private void OnEnable()
-        {
-            if (GameManager.Instance != null) GameManager.Instance.DayChanged += OnDayChanged;
-            Refresh();
-        }
-
-        private void OnDisable()
-        {
-            if (GameManager.Instance != null) GameManager.Instance.DayChanged -= OnDayChanged;
-        }
-
-        private void OnDayChanged(int _) => Refresh();
+        private void OnEnable() => Refresh();
 
         private void Refresh()
         {

@@ -1,36 +1,59 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RollingKitchen
 {
     /// <summary>
-    /// Harga pasar harian. Harga tiap bahan = harga dasar x pengali acak yang deterministik
-    /// per (bahan, hari), jadi membuka ulang Pasar di hari yang sama memberi harga yang sama
-    /// dan tren dibanding kemarin selalu konsisten tanpa perlu menyimpan data.
+    /// Pasar harian. Tiap pedagang punya stok terbatas per bahan per hari (acak tapi deterministik per
+    /// (bahan, hari), jadi membuka ulang Pasar di hari yang sama memberi angka yang sama). Harga mengikuti
+    /// ketersediaan: makin sedikit sisa stok, makin mahal; tiap pembelian mengurangi stok sehingga harga naik.
     /// </summary>
     public static class Market
     {
-        // Rentang fluktuasi harga terhadap harga dasar.
-        public const float MinMultiplier = 0.7f;
-        public const float MaxMultiplier = 1.4f;
+        // Stok awal pedagang per bahan per hari.
+        public const int MinVendorStock = 3;
+        public const int MaxVendorStock = 10;
 
-        /// <summary>Harga satu unit bahan pada hari tertentu (minimal 1).</summary>
-        public static int GetPrice(IngredientData item, int day)
+        // Pengali harga terhadap harga dasar: sisa 1 = paling mahal, sisa MaxVendorStock = paling murah.
+        public const float ScarceMultiplier = 1.4f;
+        public const float PlentyMultiplier = 0.75f;
+
+        /// <summary>Stok yang dibawa pedagang di awal hari.</summary>
+        public static int OpeningStock(IngredientData item, int day)
         {
             if (item == null) return 0;
             var rng = new System.Random(Seed(item, day));
-            float mult = MinMultiplier + (float)rng.NextDouble() * (MaxMultiplier - MinMultiplier);
+            return rng.Next(MinVendorStock, MaxVendorStock + 1);
+        }
 
-            // Pengali musim dari pengaturan hari (bila ada GameManager).
+        /// <summary>Sisa stok pedagang: stok awal dikurangi yang sudah dibeli pemain hari itu.</summary>
+        public static int VendorStock(IngredientData item, int day)
+        {
+            int stock = OpeningStock(item, day);
             var gm = GameManager.Instance;
-            if (gm != null) mult *= gm.ConfigFor(day).priceMultiplier;
+            if (gm != null && gm.Day == day) stock -= gm.BoughtToday(item);
+            return Mathf.Max(0, stock);
+        }
+
+        /// <summary>Harga satu unit pada tingkat sisa stok tertentu (minimal 1). Stok 0 dihargai seperti sisa 1.</summary>
+        public static int PriceAtStock(IngredientData item, int stock)
+        {
+            if (item == null) return 0;
+            float t = Mathf.InverseLerp(1, MaxVendorStock, Mathf.Max(1, stock));
+            float mult = Mathf.Lerp(ScarceMultiplier, PlentyMultiplier, t);
             return Mathf.Max(1, Mathf.RoundToInt(item.buyPrice * mult));
         }
 
-        /// <summary>+1 naik, -1 turun, 0 tetap/hari pertama, dibanding hari sebelumnya.</summary>
+        /// <summary>Harga sekarang (mengikuti sisa stok pedagang), sebelum diskon.</summary>
+        public static int GetPrice(IngredientData item, int day) => PriceAtStock(item, VendorStock(item, day));
+
+        /// <summary>+1 naik, -1 turun, 0 tetap/hari pertama: harga buka hari ini dibanding harga buka kemarin.</summary>
         public static int GetTrend(IngredientData item, int day)
         {
             if (day <= 1) return 0;
-            return (int)Mathf.Sign(GetPrice(item, day) - GetPrice(item, day - 1));
+            int today = PriceAtStock(item, OpeningStock(item, day));
+            int yesterday = PriceAtStock(item, OpeningStock(item, day - 1));
+            return today > yesterday ? 1 : today < yesterday ? -1 : 0;
         }
 
         // Jumlah jenis bahan yang dijual satu pedagang per hari.
@@ -50,7 +73,7 @@ namespace RollingKitchen
             return Mathf.Round(d * 20f) / 20f;
         }
 
-        /// <summary>Harga yang dibayar pemain: harga hari ini dikurangi diskon langganan pedagangnya.</summary>
+        /// <summary>Harga yang dibayar pemain: harga sekarang dikurangi diskon langganan pedagangnya.</summary>
         public static int GetSalePrice(IngredientData item, int day)
         {
             int price = GetPrice(item, day);
@@ -59,23 +82,17 @@ namespace RollingKitchen
             return d > 0f ? Mathf.Max(1, Mathf.RoundToInt(price * (1f - d))) : price;
         }
 
-        /// <summary>Kategori yang dijual zona tertentu hari ini (penempatan diacak per hari, tiap kategori sekali).</summary>
-        public static IngredientCategory CategoryForZone(int zoneIndex, int day)
+        /// <summary>Kategori lapak slot ini. Tetap setiap hari: urutan slot = urutan IngredientCategory.</summary>
+        public static IngredientCategory CategoryForZone(int zoneIndex)
         {
             var cats = (IngredientCategory[])System.Enum.GetValues(typeof(IngredientCategory));
-            var rng = new System.Random(day * 7919 + 13);
-            for (int i = cats.Length - 1; i > 0; i--) // Fisher-Yates
-            {
-                int j = rng.Next(i + 1);
-                (cats[i], cats[j]) = (cats[j], cats[i]);
-            }
             return cats[Mathf.Abs(zoneIndex) % cats.Length];
         }
 
         /// <summary>Bahan yang dijual untuk kategori tertentu hari ini: subset acak (deterministik per hari).</summary>
-        public static System.Collections.Generic.List<IngredientData> StockFor(IngredientCategory category, IngredientData[] catalog, int day)
+        public static List<IngredientData> StockFor(IngredientCategory category, IngredientData[] catalog, int day)
         {
-            var pool = new System.Collections.Generic.List<IngredientData>();
+            var pool = new List<IngredientData>();
             foreach (var item in catalog)
                 if (item != null && item.category == category) pool.Add(item);
 
@@ -89,17 +106,19 @@ namespace RollingKitchen
             return pool;
         }
 
-        /// <summary>Beli bahan memakai uang di GameManager. False bila uang kurang.</summary>
-        public static bool TryBuy(IngredientData item, int amount = 1)
+        /// <summary>Beli satu unit bahan. False bila stok pedagang habis atau uang kurang.</summary>
+        public static bool TryBuy(IngredientData item)
         {
             var gm = GameManager.Instance;
-            if (gm == null || item == null || amount <= 0) return false;
+            if (gm == null || item == null) return false;
+            if (VendorStock(item, gm.Day) <= 0) return false;
 
-            int cost = GetSalePrice(item, gm.Day) * amount;
+            int cost = GetSalePrice(item, gm.Day);
             if (gm.Money < cost) return false;
 
             gm.AddMoney(-cost);
-            gm.Inventory.Add(item, amount);
+            gm.RecordPurchase(item);
+            gm.Inventory.Add(item, 1);
             return true;
         }
 

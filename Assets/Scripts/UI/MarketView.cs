@@ -54,8 +54,7 @@ namespace RollingKitchen
             ClearRows();
             if (titleText)
             {
-                var season = gm.Config.seasonName;
-                string title = string.IsNullOrEmpty(season) ? zone.Title : $"{zone.Title}  ({season})";
+                string title = zone.Title;
                 float disc = Market.DiscountFor(zone.Category, gm.Day);
                 if (disc > 0f) title += $"\n<size=70%><color=#FFD24D>Diskon langganan {disc * 100f:0}% hari ini!</color></size>";
                 titleText.text = title;
@@ -91,6 +90,7 @@ namespace RollingKitchen
             rows.Clear();
         }
 
+        // Harga & sisa stok ikut diperbarui lewat event Inventory.Changed (dipicu setelah pembelian dicatat).
         private void Buy(IngredientData item) => Market.TryBuy(item);
 
         private void OnMoneyChanged(int _) => RefreshAll();
@@ -105,7 +105,9 @@ namespace RollingKitchen
                 var item = row.Ingredient;
                 int basePrice = Market.GetPrice(item, gm.Day);
                 int price = Market.GetSalePrice(item, gm.Day);
-                row.Refresh(price, basePrice, Market.GetTrend(item, gm.Day), gm.Inventory.Get(item), gm.Money >= price);
+                int vendorStock = Market.VendorStock(item, gm.Day);
+                row.Refresh(price, basePrice, Market.GetTrend(item, gm.Day), vendorStock, gm.Inventory.Get(item),
+                            vendorStock > 0 && gm.Money >= price);
             }
         }
 

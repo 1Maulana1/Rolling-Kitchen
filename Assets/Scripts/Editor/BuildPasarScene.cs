@@ -186,7 +186,7 @@ namespace RollingKitchen.EditorTools
 
             var nameT = MakeText(root.transform, "Nama", 24, TextAlignmentOptions.Left, 220f);
             var priceT = MakeText(root.transform, "Harga", 24, TextAlignmentOptions.Right, 180f);
-            var stockT = MakeText(root.transform, "Stok", 24, TextAlignmentOptions.Center, 80f);
+            var stockT = MakeText(root.transform, "Stok", 22, TextAlignmentOptions.Center, 130f);
 
             var btnGo = new GameObject("Beli", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             btnGo.transform.SetParent(root.transform, false);
@@ -304,8 +304,8 @@ namespace RollingKitchen.EditorTools
             zoneGo.transform.position = Art.ToWorld(stall.x + StallW * 0.5f, stall.y + 100);
             var zone = zoneGo.AddComponent<PasarZone>();
 
-            // Dagangan di meja (berganti mengikuti kategori hari ini).
-            var goodsGo = Art.Picture(zoneGo.transform, "Dagangan", goods[(int)Market.CategoryForZone(index, 1)],
+            // Dagangan di meja (kategori lapak ini tetap setiap hari).
+            var goodsGo = Art.Picture(zoneGo.transform, "Dagangan", goods[(int)Market.CategoryForZone(index)],
                 Art.ToWorld(stall.x + GoodsCenter.x, stall.y + GoodsCenter.y), -9);
 
             var so = new SerializedObject(zone);

@@ -130,16 +130,11 @@ namespace RollingKitchen
         public int LastDayNet { get; private set; }
 
         [Header("Poin (dasar bintang)")]
-        [Tooltip("Bonus poin per hidangan yang semua QTE-nya berhasil.")]
-        [SerializeField] private int perfectDishBonus = 5;
-        [Tooltip("Penalti poin per QTE gagal, mulai gagal beruntun ke-2.")]
-        [SerializeField] private int failStreakPenalty = 5;
         [Tooltip("Bonus uang saat bintang 3, sebagai pecahan pendapatan penjualan hari itu.")]
         [SerializeField, Range(0f, 1f)] private float threeStarBonus = 0.1f;
 
-        // Poin = pendapatan + bonus kualitas - penalti gagal beruntun. Bintang dihitung dari poin.
+        // Poin = pendapatan penjualan hari ini (termasuk tip). Bintang dihitung dari poin.
         private int pointsToday;
-        private int qteFailStreak;
         public int TodayPoints => pointsToday;
         public int LastDayPoints { get; private set; }
         public int LastDayBonus { get; private set; }
@@ -155,22 +150,17 @@ namespace RollingKitchen
             AddPoints(amount);
         }
 
-        /// <summary>Hidangan tersaji; bila semua QTE-nya berhasil, dapat bonus poin. Mengembalikan bonusnya.</summary>
-        public int RegisterServedDish(bool perfect)
-        {
-            if (!perfect) return 0;
-            AddPoints(perfectDishBonus);
-            return perfectDishBonus;
-        }
+        // ---------- Pembelian di Pasar hari ini (mengurangi stok pedagang) ----------
+        private readonly Dictionary<IngredientData, int> boughtToday = new Dictionary<IngredientData, int>();
 
-        /// <summary>Catat hasil satu QTE. Gagal beruntun ke-2 dan seterusnya mengurangi poin. Mengembalikan perubahan poin.</summary>
-        public int RegisterQte(bool success)
+        /// <summary>Unit bahan ini yang sudah dibeli dari pedagang hari ini.</summary>
+        public int BoughtToday(IngredientData item) => item != null && boughtToday.TryGetValue(item, out int n) ? n : 0;
+
+        /// <summary>Catat satu unit dibeli dari pedagang hari ini.</summary>
+        public void RecordPurchase(IngredientData item)
         {
-            if (success) { qteFailStreak = 0; return 0; }
-            qteFailStreak++;
-            if (qteFailStreak < 2) return 0;
-            AddPoints(-failStreakPenalty);
-            return -failStreakPenalty;
+            if (item == null) return;
+            boughtToday[item] = BoughtToday(item) + 1;
         }
 
         private void AddPoints(int amount)
@@ -225,7 +215,7 @@ namespace RollingKitchen
             LastDayRevenue = revenueToday;
             LastDayPoints = pointsToday;
 
-            // Bintang dihitung dari poin (pendapatan + bonus kualitas - penalti), bukan laba bersih.
+            // Bintang dihitung dari poin (= pendapatan), bukan laba bersih.
             LastDayStars = CalculateStars(pointsToday);
             Stats.totalStars += LastDayStars;
             if (LastDayStars == 0) failedDays++;
@@ -256,6 +246,7 @@ namespace RollingKitchen
             phase = GamePhase.Pagi;
             moneyAtDayStart = money;
             revenueToday = 0;
+            boughtToday.Clear(); // pedagang datang dengan stok baru
             Inventory.Today = day;
             // Bahan yang lewat umurnya dibuang saat pagi tiba (peringatannya sudah tampil kemarin).
             SpoiledToday = Inventory.RemoveExpired(day);
@@ -269,7 +260,6 @@ namespace RollingKitchen
         private void ResetDailyPoints()
         {
             pointsToday = 0;
-            qteFailStreak = 0;
             PointsChanged?.Invoke(pointsToday);
         }
 
@@ -297,6 +287,7 @@ namespace RollingKitchen
             LastDayStars = 0;
             Inventory.Clear();
             Inventory.Today = day;
+            boughtToday.Clear();
             Recipes.Clear();
             Upgrades.Clear();
             Stats.Clear();
@@ -380,6 +371,7 @@ namespace RollingKitchen
                 if (Upgrades.Level(t) > 0)
                     d.tools.Add(new SaveData.ToolLevel { tool = t, level = Upgrades.Level(t), perk = Upgrades.Perk(t) });
             foreach (var kv in Stats.dishes) d.dishesServed.Add(new SaveData.ItemCount { id = kv.Key, count = kv.Value });
+            foreach (var kv in boughtToday) d.marketBought.Add(new SaveData.ItemCount { id = ItemDatabase.IdOf(kv.Key), count = kv.Value, day = day });
             return d;
         }
 
@@ -423,6 +415,12 @@ namespace RollingKitchen
                     var r = db.FindRecipe(id);
                     if (r != null) Recipes.Unlock(r);
                 }
+                if (d.marketBought != null)
+                    foreach (var it in d.marketBought)
+                    {
+                        var item = db.FindIngredient(it.id);
+                        if (item != null && it.day == day) boughtToday[item] = it.count;
+                    }
             }
 
             ApplyDayConfig();

@@ -9,17 +9,17 @@ namespace RollingKitchen.EditorTools
     {
         private const string Path = "Assets/Resources/Levels.asset";
 
-        // target, eksperimen, pelanggan maks, kesabaran, jeda spawn, musim, pengali harga
+        // target, eksperimen, pelanggan maks, kesabaran, jeda spawn
         // Semua angka SEMENTARA untuk playtest; ubah langsung di asset Levels.
-        private static readonly (int target, bool exp, int max, float patience, float spawn, string season, float price)[] Demo =
+        private static readonly (int target, bool exp, int max, float patience, float spawn)[] Demo =
         {
-            (60,  false, 2, 40f, 12f, "Kemarau", 1.00f),
-            (80,  false, 2, 38f, 11f, "Kemarau", 1.00f),
-            (100, true,  3, 36f, 10f, "Hujan",   1.15f),
-            (120, true,  3, 34f, 9f,  "Hujan",   1.15f),
-            (140, true,  3, 32f, 9f,  "Panen",   0.90f),
-            (160, true,  3, 30f, 8f,  "Panen",   0.90f),
-            (180, true,  3, 28f, 8f,  "Panen",   0.90f),
+            (60,  false, 2, 40f, 12f),
+            (80,  false, 2, 38f, 11f),
+            (100, true,  3, 36f, 10f),
+            (120, true,  3, 34f, 9f),
+            (140, true,  3, 32f, 9f),
+            (160, true,  3, 30f, 8f),
+            (180, true,  3, 28f, 8f),
         };
 
         [MenuItem("Rolling Kitchen/Create Level Data")]
@@ -48,8 +48,6 @@ namespace RollingKitchen.EditorTools
                     maxCustomers = d.max,
                     patienceSeconds = d.patience,
                     spawnInterval = d.spawn,
-                    seasonName = d.season,
-                    priceMultiplier = d.price,
                 };
             }
             AssetDatabase.CreateAsset(set, Path);

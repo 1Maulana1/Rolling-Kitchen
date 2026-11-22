@@ -28,6 +28,7 @@ namespace RollingKitchen
         public List<string> recipes = new List<string>();
         public List<ToolLevel> tools = new List<ToolLevel>();
         public List<ItemCount> dishesServed = new List<ItemCount>();
+        public List<ItemCount> marketBought = new List<ItemCount>(); // dibeli dari pedagang pada `day` (stok pedagang berkurang)
 
         public int totalRevenue, totalStars, customersServed, customersLost, wrongServes,
                    burntDishes, experimentsTried, experimentsSucceeded, spoiledUnits;

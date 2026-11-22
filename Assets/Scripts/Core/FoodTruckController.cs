@@ -297,12 +297,11 @@ namespace RollingKitchen
                 gm.AddRevenue(pay);
                 gm.Stats.customersServed++;
                 gm.Stats.AddDish(dish.recipe);
-                int bonus = gm.RegisterServedDish(dish.quality >= 0.999f);
                 revenue += pay;
                 served++;
                 combo++;
                 string tipText = tip > 0 ? $" (tip Rp {tip})" : "";
-                Say(bonus > 0 ? $"+Rp {pay}{tipText}  Sempurna! +{bonus} poin" : $"+Rp {pay}{tipText}");
+                Say($"+Rp {pay}{tipText}");
             }
 
             dishes.RemoveAt(selectedDish);
@@ -437,7 +436,6 @@ namespace RollingKitchen
             if (!t.qtePrompt.activeSelf) return;
             t.qtePrompt.SetActive(false);
             t.nextQte++;
-            int delta = gm.RegisterQte(success);
             if (success) { combo++; t.quality += 1f / qteCount; t.failStreak = 0; return; }
 
             combo = 0;
@@ -446,14 +444,14 @@ namespace RollingKitchen
             {
                 // Gosong: hidangan dibuang, alat kotor, bahan (sudah terpakai) hilang.
                 gm.Stats.burntDishes++;
-                Say($"{t.recipe.displayName} GOSONG! Dibuang, alat kotor." + (delta < 0 ? $" {delta} poin" : ""));
+                Say($"{t.recipe.displayName} GOSONG! Dibuang, alat kotor.");
                 t.state = ToolState.Dirty;
                 t.recipe = null;
                 t.contents.Clear();
                 RefreshTools();
                 return;
             }
-            Say(delta < 0 ? $"QTE gagal beruntun! {delta} poin" : "QTE gagal! Sekali lagi bisa gosong.");
+            Say("QTE gagal! Sekali lagi bisa gosong.");
         }
 
         private void OnClothClicked()
