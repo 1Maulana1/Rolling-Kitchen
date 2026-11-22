@@ -136,3 +136,16 @@ crashlytics-build.properties
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# ---- Tambahan proyek Rolling Kitchen ----
+# Unity Version Control (Plastic) dan alat pribadi
+.plastic/
+ignore.conf
+.claude/settings.local.json
+# Salinan lokal paket MCP (tim mengambilnya dari URL git di Packages/manifest.json)
+/Packages/com.coplaydev.unity-mcp/
+# Tangkapan layar editor
+/Assets/Screenshots/
+/Assets/Screenshots.meta
+# Salinan cadangan Unity Version Control
+*.private.0

@@ -1,0 +1,116 @@
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+
+namespace RollingKitchen
+{
+    /// <summary>Panel beli: menampilkan dagangan satu pedagang (zona) dengan harga hari ini.</summary>
+    public class MarketView : MonoBehaviour
+    {
+        [Tooltip("Semua bahan yang ada di game; tiap pedagang menjual subset acak per hari.")]
+        [SerializeField] private IngredientData[] catalog;
+        [SerializeField] private MarketRowView rowPrefab;
+        [SerializeField] private Transform rowParent;
+        [SerializeField] private GameObject panelRoot;
+        [SerializeField] private TMP_Text titleText;
+
+        private readonly List<MarketRowView> rows = new List<MarketRowView>();
+        private GameManager gm;
+        private PasarZone currentZone;
+
+        public bool IsOpen => panelRoot != null && panelRoot.activeSelf;
+
+        private void Awake()
+        {
+            if (panelRoot) panelRoot.SetActive(false);
+        }
+
+        private void OnEnable()
+        {
+            gm = GameManager.Instance;
+            if (gm == null)
+            {
+                Debug.LogWarning("MarketView: GameManager belum ada di scene.", this);
+                return;
+            }
+            gm.MoneyChanged += OnMoneyChanged;
+            gm.Inventory.Changed += OnStockChanged;
+        }
+
+        private void OnDisable()
+        {
+            if (gm == null) return;
+            gm.MoneyChanged -= OnMoneyChanged;
+            gm.Inventory.Changed -= OnStockChanged;
+            gm = null;
+        }
+
+        /// <summary>Buka panel untuk pedagang di zona ini.</summary>
+        public void Open(PasarZone zone)
+        {
+            if (gm == null || zone == null) return;
+            currentZone = zone;
+
+            ClearRows();
+            if (titleText)
+            {
+                var season = gm.Config.seasonName;
+                titleText.text = string.IsNullOrEmpty(season) ? zone.Title : $"{zone.Title}  ({season})";
+            }
+            foreach (var item in Market.StockFor(zone.Category, catalog, gm.Day))
+            {
+                var row = Instantiate(rowPrefab, rowParent);
+                row.Bind(item, Buy);
+                rows.Add(row);
+            }
+
+            panelRoot.SetActive(true);
+            GameInput.Locked = true;
+            RefreshAll();
+        }
+
+        public void Close()
+        {
+            currentZone = null;
+            if (panelRoot) panelRoot.SetActive(false);
+            GameInput.Locked = false;
+        }
+
+        private void Update()
+        {
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (IsOpen && kb != null && kb.escapeKey.wasPressedThisFrame) Close();
+        }
+
+        private void ClearRows()
+        {
+            foreach (var r in rows) if (r) Destroy(r.gameObject);
+            rows.Clear();
+        }
+
+        private void Buy(IngredientData item) => Market.TryBuy(item);
+
+        private void OnMoneyChanged(int _) => RefreshAll();
+        private void OnStockChanged(IngredientData _, int __) => RefreshAll();
+
+        private void RefreshAll()
+        {
+            if (gm == null) return;
+            foreach (var row in rows)
+            {
+                if (!row) continue;
+                var item = row.Ingredient;
+                int price = Market.GetPrice(item, gm.Day);
+                row.Refresh(price, Market.GetTrend(item, gm.Day), gm.Inventory.Get(item), gm.Money >= price);
+            }
+        }
+
+        /// <summary>Tombol "Selesai Belanja": lanjut ke fase berikutnya dan kembali ke Rumah.</summary>
+        public void FinishShopping()
+        {
+            if (gm == null) return;
+            gm.AdvancePhase();
+            SceneLoader.Load(GameScene.Rumah);
+        }
+    }
+}

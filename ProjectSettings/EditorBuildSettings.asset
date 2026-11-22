@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/TitleScreen.unity
+    guid: 82402fc6ae174b142b3fad35e013ca14
+  - enabled: 1
+    path: Assets/Scenes/Rumah.unity
+    guid: b1580f95ea93812458d5187efbba0104
+  - enabled: 1
+    path: Assets/Scenes/Pasar.unity
+    guid: 84040de9e8eb72a4cb37bd2d341bf349
+  - enabled: 1
+    path: Assets/Scenes/FoodTruck.unity
+    guid: bd5153f8d5dd80f45b33dd94e64857ea
+  - enabled: 1
+    path: Assets/Scenes/Rekap.unity
+    guid: 582bb2b66f026134987f4dcf3ca70b1a
+  - enabled: 1
+    path: Assets/Scenes/SampleScene.unity
+    guid: 8c9cfa26abfee488c85f1582747f6a02
+  m_configObjects:
+    com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
+    com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}

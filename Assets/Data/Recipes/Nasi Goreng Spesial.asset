@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2012e8b343890d479bb848174b68103, type: 3}
+  m_Name: Nasi Goreng Spesial
+  m_EditorClassIdentifier: Assembly-CSharp::RollingKitchen.RecipeData
+  displayName: Nasi Goreng Spesial
+  icon: {fileID: 0}
+  isSpecial: 1
+  sellPrice: 45
+  tool: 0
+  cookSeconds: 5
+  ingredients:
+  - ingredient: {fileID: 11400000, guid: 18c068e1869ac1b4e9092d06e6ed2632, type: 2}
+    amount: 1
+  - ingredient: {fileID: 11400000, guid: 3ca442da6aefca14c9bc89e58b208a22, type: 2}
+    amount: 1
+  - ingredient: {fileID: 11400000, guid: 3482b2f8761d34e49ad18ac46b4069b8, type: 2}
+    amount: 1

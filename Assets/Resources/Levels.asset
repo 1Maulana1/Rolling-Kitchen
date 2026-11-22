@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6489b4de58816a41b518db52c3d9b54, type: 3}
+  m_Name: Levels
+  m_EditorClassIdentifier: Assembly-CSharp::RollingKitchen.LevelSet
+  startingMoney: 100
+  finalTarget: 700
+  maxFailedDays: 2
+  days:
+  - dailyTarget: 60
+    allowExperiment: 0
+    maxCustomers: 2
+    patienceSeconds: 40
+    spawnInterval: 12
+    seasonName: Kemarau
+    priceMultiplier: 1
+  - dailyTarget: 80
+    allowExperiment: 0
+    maxCustomers: 2
+    patienceSeconds: 38
+    spawnInterval: 11
+    seasonName: Kemarau
+    priceMultiplier: 1
+  - dailyTarget: 100
+    allowExperiment: 1
+    maxCustomers: 3
+    patienceSeconds: 36
+    spawnInterval: 10
+    seasonName: Hujan
+    priceMultiplier: 1.15
+  - dailyTarget: 120
+    allowExperiment: 1
+    maxCustomers: 3
+    patienceSeconds: 34
+    spawnInterval: 9
+    seasonName: Hujan
+    priceMultiplier: 1.15
+  - dailyTarget: 140
+    allowExperiment: 1
+    maxCustomers: 3
+    patienceSeconds: 32
+    spawnInterval: 9
+    seasonName: Panen
+    priceMultiplier: 0.9
+  - dailyTarget: 160
+    allowExperiment: 1
+    maxCustomers: 3
+    patienceSeconds: 30
+    spawnInterval: 8
+    seasonName: Panen
+    priceMultiplier: 0.9
+  - dailyTarget: 180
+    allowExperiment: 1
+    maxCustomers: 3
+    patienceSeconds: 28
+    spawnInterval: 8
+    seasonName: Panen
+    priceMultiplier: 0.9
