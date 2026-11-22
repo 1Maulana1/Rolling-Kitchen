@@ -13,7 +13,21 @@ namespace RollingKitchen
         public Sprite icon;
         public IngredientCategory category;
         [Min(0)] public int buyPrice;
-        [Tooltip("Hari sebelum bahan basi (0 = tidak basi).")]
+        [Tooltip("Berapa hari bahan bisa dipakai, termasuk hari beli (0 = ikut kategori: ikan/daging 3, sayur 4, lainnya 7).")]
         [Min(0)] public int shelfLifeDays;
+
+        /// <summary>Umur pakai dalam hari. Dibeli hari d, masih bisa dipakai sampai hari d + umur - 1.</summary>
+        public int ShelfLife => shelfLifeDays > 0 ? shelfLifeDays : DefaultShelfLife(category);
+
+        public static int DefaultShelfLife(IngredientCategory c)
+        {
+            switch (c)
+            {
+                case IngredientCategory.Daging:
+                case IngredientCategory.Ikan: return 3;
+                case IngredientCategory.Sayur: return 4;
+                default: return 7;
+            }
+        }
     }
 }

@@ -37,10 +37,14 @@ namespace RollingKitchen
         private void OnDisable() => SceneManager.activeSceneChanged -= OnSceneChanged;
         private void OnSceneChanged(Scene _, Scene __) { if (IsPaused) Resume(); }
 
+        // Menu jeda dibuat sekali, sebelum skala teks dari Options sempat diterapkan.
+        private void Start() => GameSettings.ApplyTextScaleAll();
+
         private void Update()
         {
             var kb = Keyboard.current;
             if (kb == null || !kb.escapeKey.wasPressedThisFrame) return;
+            if (OptionsMenu.OwnsEscape || DialogueOverlay.IsOpen) return;
 
             if (IsPaused) Resume();
             // Bila frame lalu ada panel terbuka, Esc kali ini milik panel itu (menutupnya), bukan menu jeda.
@@ -54,6 +58,7 @@ namespace RollingKitchen
             IsPaused = true;
             Time.timeScale = 0f;
             GameInput.Locked = true;
+            RefreshLabels();
             root.SetActive(true);
         }
 
@@ -68,9 +73,21 @@ namespace RollingKitchen
         private void QuitToTitle()
         {
             Resume();
-            // Sistem simpan belum ada: keluar = mulai ulang dari Title.
-            if (GameManager.Instance != null) GameManager.Instance.ResetGame();
+            var gm = GameManager.Instance;
+            if (gm != null) gm.SaveCurrent(); // tanpa slot (uji scene langsung) tidak ada yang disimpan
             SceneLoader.Load(GameScene.TitleScreen);
+        }
+
+        // Label tombol keluar mengikuti ada/tidaknya slot aktif (diperbarui tiap menu dibuka).
+        private TextMeshProUGUI quitLabel, noteLabel;
+
+        private void RefreshLabels()
+        {
+            bool hasSlot = GameManager.Instance != null && GameManager.Instance.CurrentSlot >= 0;
+            if (quitLabel) quitLabel.text = hasSlot ? "Simpan & Keluar ke Title" : "Keluar ke Title";
+            if (noteLabel) noteLabel.text = hasSlot
+                ? $"Slot {GameManager.Instance.CurrentSlot + 1}"
+                : "Mode uji: progres tidak disimpan.";
         }
 
         // ---------- UI ----------
@@ -93,7 +110,7 @@ namespace RollingKitchen
 
             var panel = new GameObject("Panel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
             panel.transform.SetParent(root.transform, false);
-            panel.GetComponent<Image>().color = new Color(0.1f, 0.08f, 0.08f, 0.96f);
+            panel.GetComponent<Image>().color = new Color(0.1f, 0.08f, 0.08f, 1f);
             var prt = (RectTransform)panel.transform;
             prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0.5f, 0.5f);
             prt.sizeDelta = new Vector2(520, 440);
@@ -108,12 +125,12 @@ namespace RollingKitchen
             title.gameObject.AddComponent<LayoutElement>().preferredHeight = 70f;
 
             Button(panel.transform, "Lanjut", new Color(0.2f, 0.6f, 0.3f), Resume, true);
-            Button(panel.transform, "Options (segera)", new Color(0.35f, 0.35f, 0.4f), null, false);
-            Button(panel.transform, "Keluar ke Title", new Color(0.75f, 0.25f, 0.2f), QuitToTitle, true);
+            Button(panel.transform, "Options", new Color(0.35f, 0.35f, 0.4f), () => OptionsMenu.Open(), true);
+            quitLabel = Button(panel.transform, "Keluar ke Title", new Color(0.75f, 0.25f, 0.2f), QuitToTitle, true);
 
-            var note = Text(panel.transform, "Progres belum bisa disimpan.", 22);
-            note.color = new Color(1f, 1f, 1f, 0.6f);
-            note.gameObject.AddComponent<LayoutElement>().preferredHeight = 34f;
+            noteLabel = Text(panel.transform, "", 22);
+            noteLabel.color = new Color(1f, 1f, 1f, 0.6f);
+            noteLabel.gameObject.AddComponent<LayoutElement>().preferredHeight = 34f;
 
             root.SetActive(false);
         }
@@ -131,7 +148,7 @@ namespace RollingKitchen
             return t;
         }
 
-        private static void Button(Transform parent, string label, Color color, UnityEngine.Events.UnityAction onClick, bool interactable)
+        private static TextMeshProUGUI Button(Transform parent, string label, Color color, UnityEngine.Events.UnityAction onClick, bool interactable)
         {
             var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
@@ -142,6 +159,7 @@ namespace RollingKitchen
             if (onClick != null) b.onClick.AddListener(onClick);
             var t = Text(go.transform, label, 28);
             Stretch(t.rectTransform);
+            return t;
         }
 
         private static void Stretch(RectTransform rt)

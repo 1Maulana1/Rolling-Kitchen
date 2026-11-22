@@ -249,18 +249,47 @@ namespace RollingKitchen.EditorTools
             Art.Solid(solids.transform, "Tepi kanan", 960, 0, 980, 400);
 
             for (int i = 0; i < SlotStalls.Length; i++) BuildZone(world.transform, i, SlotStalls[i], goods);
+            BuildToolShop(world.transform, square);
 
             // Pemain (MC) masuk dari lorong bawah.
-            return MakePlayer(world.transform, square, Art.ToWorld(480, 384), new Vector2(0.55f, 0.85f));
+            return MakePlayer(world.transform, square, Art.ToWorld(480, 384), PlayerSprites.Ppu / Art.Ppu);
         }
 
-        /// <summary>Pemain placeholder: kotak biru dengan collider di kaki agar bisa lewat di depan benda.</summary>
-        internal static PlayerController2D MakePlayer(Transform parent, Sprite square, Vector2 pos, Vector2 size)
+        /// <summary>
+        /// Pemain: sprite koki 16x24 px (PPU 32) dengan animasi 4 arah, collider kecil di kaki agar bisa lewat
+        /// di depan benda. pixelScale = PPU sprite / PPU latar, supaya ukuran pikselnya sama dengan gambar latar.
+        /// Bila lembar sprite belum ada, jatuh kembali ke kotak biru.
+        /// </summary>
+        internal static PlayerController2D MakePlayer(Transform parent, Sprite square, Vector2 pos, float pixelScale)
         {
-            var mc = MakeBlock(parent, square, "MC", pos, size, new Color(0.2f, 0.45f, 0.95f), 0f, 5, false);
-            var col = mc.AddComponent<BoxCollider2D>();
-            col.size = new Vector2(0.9f, 0.35f); // satuan lokal (sudah dikali scale)
-            col.offset = new Vector2(0f, -0.325f);
+            var frames = PlayerSprites.Load();
+            GameObject mc;
+            if (frames != null)
+            {
+                mc = new GameObject("MC");
+                mc.transform.SetParent(parent, false);
+                mc.transform.position = pos;
+                mc.transform.localScale = new Vector3(pixelScale, pixelScale, 1f);
+                var sr = mc.AddComponent<SpriteRenderer>();
+                sr.sprite = frames[0];
+                sr.sortingOrder = 5;
+                var anim = mc.AddComponent<PlayerSpriteAnimator>();
+                var aso = new SerializedObject(anim);
+                var arr = aso.FindProperty("frames");
+                arr.arraySize = frames.Length;
+                for (int i = 0; i < frames.Length; i++) arr.GetArrayElementAtIndex(i).objectReferenceValue = frames[i];
+                aso.ApplyModifiedPropertiesWithoutUndo();
+                var c = mc.AddComponent<BoxCollider2D>();
+                c.size = new Vector2(0.36f, 0.14f); // satuan lokal sprite (0,5 x 0,75)
+                c.offset = new Vector2(0f, -0.3f);
+            }
+            else
+            {
+                mc = MakeBlock(parent, square, "MC", pos, new Vector2(0.5f, 0.75f) * pixelScale, new Color(0.2f, 0.45f, 0.95f), 0f, 5, false);
+                var c = mc.AddComponent<BoxCollider2D>();
+                c.size = new Vector2(0.72f, 0.2f);
+                c.offset = new Vector2(0f, -0.4f);
+            }
             var rb = mc.AddComponent<Rigidbody2D>();
             rb.gravityScale = 0f;
             rb.freezeRotation = true;
@@ -292,6 +321,29 @@ namespace RollingKitchen.EditorTools
             var vso = new SerializedObject(vendor);
             vso.FindProperty("zone").objectReferenceValue = zone;
             vso.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        // Toko Alat: ruko paling kanan (papan nama ditempel di atas pintunya), dipakai dari trotoar depan ruko.
+        private static void BuildToolShop(Transform parent, Sprite square)
+        {
+            var shop = new GameObject("Toko Alat");
+            shop.transform.SetParent(parent, false);
+            shop.transform.position = Art.ToWorld(895, 98);
+            shop.AddComponent<ToolShop>();
+
+            var plate = MakeBlock(shop.transform, square, "Papan Toko Alat", Art.ToWorld(895, 74), new Vector2(2.4f, 0.42f),
+                new Color(0.25f, 0.16f, 0.1f), 0f, 1, false);
+            var label = new GameObject("Teks");
+            label.transform.SetParent(plate.transform, false);
+            label.transform.localScale = new Vector3(1f / 2.4f, 1f / 0.42f, 1f);
+            var t = label.AddComponent<TextMeshPro>();
+            t.text = "TOKO ALAT";
+            t.fontSize = 3f;
+            t.fontStyle = FontStyles.Bold;
+            t.alignment = TextAlignmentOptions.Center;
+            t.color = new Color(1f, 0.85f, 0.35f);
+            t.sortingOrder = 2;
+            ((RectTransform)label.transform).sizeDelta = new Vector2(2.4f, 0.42f);
         }
 
         internal static GameObject MakeBlock(Transform parent, Sprite sprite, string name, Vector2 pos, Vector2 size, Color color, float rotZ, int order, bool collider)
@@ -398,7 +450,7 @@ namespace RollingKitchen.EditorTools
         {
             var panel = new GameObject("Panel Beli", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
             panel.transform.SetParent(uiGo.transform, false);
-            panel.GetComponent<Image>().color = new Color(0.08f, 0.08f, 0.1f, 0.92f);
+            panel.GetComponent<Image>().color = new Color(0.08f, 0.08f, 0.1f, 1f); // opak: ruang warna linear membuat 0,92 tampak tembus
             var prt = (RectTransform)panel.transform;
             prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0.5f, 0.5f);
             prt.sizeDelta = new Vector2(700, 420);
@@ -411,7 +463,7 @@ namespace RollingKitchen.EditorTools
 
             var title = MakeText(panel.transform, "Judul", 34, TextAlignmentOptions.Center, 0f);
             title.text = "Pedagang";
-            title.gameObject.AddComponent<LayoutElement>().preferredHeight = 60f;
+            title.gameObject.AddComponent<LayoutElement>().preferredHeight = 84f; // baris kedua: info diskon langganan
 
             var close = new GameObject("Tutup", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             close.transform.SetParent(panel.transform, false);

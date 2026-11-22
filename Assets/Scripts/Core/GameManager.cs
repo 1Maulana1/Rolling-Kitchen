@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RollingKitchen
@@ -50,6 +51,19 @@ namespace RollingKitchen
         public Inventory Inventory { get; } = new Inventory();
         /// <summary>Resep yang sudah terbuka.</summary>
         public RecipeBook Recipes { get; } = new RecipeBook();
+        /// <summary>Upgrade alat masak (Toko Alat di Pasar).</summary>
+        public ToolUpgrades Upgrades { get; } = new ToolUpgrades();
+        /// <summary>Statistik sepanjang permainan (ringkasan akhir).</summary>
+        public GameStats Stats { get; } = new GameStats();
+        /// <summary>Cutscene pembuka sudah ditonton di slot ini.</summary>
+        public bool IntroSeen { get; set; }
+        /// <summary>Bahan yang basi dan dibuang pagi ini (ditampilkan di Rumah).</summary>
+        public List<KeyValuePair<IngredientData, int>> SpoiledToday { get; private set; } = new List<KeyValuePair<IngredientData, int>>();
+
+        /// <summary>Skill koki terbuka mulai hari tertentu.</summary>
+        public const int QuickHandsDay = 4, CalmDay = 6;
+        public bool QuickHandsUnlocked => day >= QuickHandsDay;
+        public bool CalmUnlocked => day >= CalmDay;
         [Header("Level")]
         [SerializeField] private LevelSet levels;
 
@@ -100,6 +114,7 @@ namespace RollingKitchen
 
             ApplyDayConfig();
             moneyAtDayStart = money;
+            Inventory.Today = day;
         }
 
         private void OnDestroy()
@@ -135,6 +150,7 @@ namespace RollingKitchen
         {
             if (amount <= 0) return;
             revenueToday += amount;
+            Stats.totalRevenue += amount;
             AddMoney(amount);
             AddPoints(amount);
         }
@@ -211,6 +227,7 @@ namespace RollingKitchen
 
             // Bintang dihitung dari poin (pendapatan + bonus kualitas - penalti), bukan laba bersih.
             LastDayStars = CalculateStars(pointsToday);
+            Stats.totalStars += LastDayStars;
             if (LastDayStars == 0) failedDays++;
 
             // Bintang 3: bonus uang dari pendapatan penjualan hari ini.
@@ -239,6 +256,10 @@ namespace RollingKitchen
             phase = GamePhase.Pagi;
             moneyAtDayStart = money;
             revenueToday = 0;
+            Inventory.Today = day;
+            // Bahan yang lewat umurnya dibuang saat pagi tiba (peringatannya sudah tampil kemarin).
+            SpoiledToday = Inventory.RemoveExpired(day);
+            foreach (var s in SpoiledToday) Stats.spoiledUnits += s.Value;
             ResetDailyPoints();
             ApplyDayConfig();
             DayChanged?.Invoke(day);
@@ -251,6 +272,9 @@ namespace RollingKitchen
             qteFailStreak = 0;
             PointsChanged?.Invoke(pointsToday);
         }
+
+        /// <summary>Ambang bintang ke-(i+1) sebagai kelipatan target harian (1,0 / 1,25 / 1,5).</summary>
+        public float StarThreshold(int i) => i <= 0 ? star1Threshold : i == 1 ? star2Threshold : star3Threshold;
 
         /// <summary>Hitung bintang (0-3) dari poin hari ini terhadap target harian.</summary>
         public int CalculateStars(int points)
@@ -272,7 +296,12 @@ namespace RollingKitchen
             failedDays = 0;
             LastDayStars = 0;
             Inventory.Clear();
+            Inventory.Today = day;
             Recipes.Clear();
+            Upgrades.Clear();
+            Stats.Clear();
+            IntroSeen = false;
+            SpoiledToday.Clear();
             Outcome = GameOutcome.Berjalan;
             moneyAtDayStart = money;
             revenueToday = 0;
@@ -289,6 +318,118 @@ namespace RollingKitchen
         {
             Outcome = outcome;
             GameEnded?.Invoke(outcome);
+        }
+
+        // ---------- Simpan / Muat (3 slot) ----------
+
+        /// <summary>Slot yang sedang dimainkan (0-2), atau -1 bila scene diuji langsung tanpa slot.</summary>
+        public int CurrentSlot { get; private set; } = -1;
+
+        /// <summary>Mulai permainan baru di slot tertentu (menimpa isinya) dan langsung simpan.</summary>
+        public void NewGame(int slot)
+        {
+            ResetGame();
+            CurrentSlot = slot;
+            SaveCurrent();
+        }
+
+        /// <summary>Muat slot. False bila slot kosong/rusak.</summary>
+        public bool LoadGame(int slot)
+        {
+            var data = SaveSystem.Read(slot);
+            if (data == null) return false;
+            ResetGame();
+            ApplyState(data);
+            CurrentSlot = slot;
+            return true;
+        }
+
+        /// <summary>Simpan ke slot aktif. False bila tidak ada slot (mode uji) atau permainan sudah selesai.</summary>
+        public bool SaveCurrent()
+        {
+            if (CurrentSlot < 0 || Outcome != GameOutcome.Berjalan) return false;
+            SaveSystem.Write(CurrentSlot, CaptureState());
+            return true;
+        }
+
+        /// <summary>Permainan di slot aktif selesai (menang/kalah): kosongkan slotnya.</summary>
+        public void ClearCurrentSlot()
+        {
+            if (CurrentSlot >= 0) SaveSystem.Delete(CurrentSlot);
+            CurrentSlot = -1;
+        }
+
+        private SaveData CaptureState()
+        {
+            var d = new SaveData
+            {
+                day = day, phase = phase, money = money, moneyAtDayStart = moneyAtDayStart,
+                revenueToday = revenueToday, pointsToday = pointsToday,
+                failedDays = failedDays, experimentFails = experimentFails, introSeen = IntroSeen,
+                totalRevenue = Stats.totalRevenue, totalStars = Stats.totalStars,
+                customersServed = Stats.customersServed, customersLost = Stats.customersLost,
+                wrongServes = Stats.wrongServes, burntDishes = Stats.burntDishes,
+                experimentsTried = Stats.experimentsTried, experimentsSucceeded = Stats.experimentsSucceeded,
+                spoiledUnits = Stats.spoiledUnits,
+            };
+            foreach (var kv in Inventory.Items)
+                foreach (var b in Inventory.BatchesOf(kv.Key))
+                    d.inventory.Add(new SaveData.ItemCount { id = ItemDatabase.IdOf(kv.Key), count = b.count, day = b.day });
+            foreach (var r in Recipes.All) d.recipes.Add(ItemDatabase.IdOf(r));
+            foreach (ToolType t in Enum.GetValues(typeof(ToolType)))
+                if (Upgrades.Level(t) > 0)
+                    d.tools.Add(new SaveData.ToolLevel { tool = t, level = Upgrades.Level(t), perk = Upgrades.Perk(t) });
+            foreach (var kv in Stats.dishes) d.dishesServed.Add(new SaveData.ItemCount { id = kv.Key, count = kv.Value });
+            return d;
+        }
+
+        private void ApplyState(SaveData d)
+        {
+            day = Mathf.Clamp(d.day, 1, totalDays);
+            phase = d.phase;
+            money = d.money;
+            moneyAtDayStart = d.moneyAtDayStart;
+            revenueToday = d.revenueToday;
+            pointsToday = d.pointsToday;
+            failedDays = d.failedDays;
+            experimentFails = d.experimentFails;
+            IntroSeen = d.introSeen || d.version < 2 || day > 1; // simpanan lama: jangan putar ulang pembuka
+            Inventory.Today = day;
+
+            Stats.totalRevenue = d.totalRevenue;
+            Stats.totalStars = d.totalStars;
+            Stats.customersServed = d.customersServed;
+            Stats.customersLost = d.customersLost;
+            Stats.wrongServes = d.wrongServes;
+            Stats.burntDishes = d.burntDishes;
+            Stats.experimentsTried = d.experimentsTried;
+            Stats.experimentsSucceeded = d.experimentsSucceeded;
+            Stats.spoiledUnits = d.spoiledUnits;
+            if (d.dishesServed != null) foreach (var it in d.dishesServed) Stats.dishes[it.id] = it.count;
+            if (d.tools != null) foreach (var t in d.tools) Upgrades.Set(t.tool, t.level, t.perk);
+
+            var db = ItemDatabase.Instance;
+            if (db == null) Debug.LogWarning("ItemDatabase belum ada (menu Rolling Kitchen > Update Item Database): stok dan resep tidak dimuat.");
+            else
+            {
+                foreach (var it in d.inventory)
+                {
+                    var item = db.FindIngredient(it.id);
+                    if (item != null) Inventory.Add(item, it.count, it.day > 0 ? it.day : day);
+                    else Debug.LogWarning($"Bahan simpanan tidak dikenal: {it.id}");
+                }
+                foreach (var id in d.recipes)
+                {
+                    var r = db.FindRecipe(id);
+                    if (r != null) Recipes.Unlock(r);
+                }
+            }
+
+            ApplyDayConfig();
+            DayChanged?.Invoke(day);
+            PhaseChanged?.Invoke(phase);
+            MoneyChanged?.Invoke(money);
+            PointsChanged?.Invoke(pointsToday);
         }
     }
 }

@@ -55,7 +55,10 @@ namespace RollingKitchen
             if (titleText)
             {
                 var season = gm.Config.seasonName;
-                titleText.text = string.IsNullOrEmpty(season) ? zone.Title : $"{zone.Title}  ({season})";
+                string title = string.IsNullOrEmpty(season) ? zone.Title : $"{zone.Title}  ({season})";
+                float disc = Market.DiscountFor(zone.Category, gm.Day);
+                if (disc > 0f) title += $"\n<size=70%><color=#FFD24D>Diskon langganan {disc * 100f:0}% hari ini!</color></size>";
+                titleText.text = title;
             }
             foreach (var item in Market.StockFor(zone.Category, catalog, gm.Day))
             {
@@ -100,8 +103,9 @@ namespace RollingKitchen
             {
                 if (!row) continue;
                 var item = row.Ingredient;
-                int price = Market.GetPrice(item, gm.Day);
-                row.Refresh(price, Market.GetTrend(item, gm.Day), gm.Inventory.Get(item), gm.Money >= price);
+                int basePrice = Market.GetPrice(item, gm.Day);
+                int price = Market.GetSalePrice(item, gm.Day);
+                row.Refresh(price, basePrice, Market.GetTrend(item, gm.Day), gm.Inventory.Get(item), gm.Money >= price);
             }
         }
 

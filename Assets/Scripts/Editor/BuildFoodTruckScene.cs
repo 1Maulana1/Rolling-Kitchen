@@ -17,9 +17,10 @@ namespace RollingKitchen.EditorTools
         private const string RecipeDir = "Assets/Data/Recipes";
         private const string ItemPrefabPath = "Assets/Prefabs/ShelfItem.prefab";
 
-        // Skala sketsa (1549 x 848) ke kanvas 1920 x 1080.
-        private const float Sx = 1920f / 1549f;
-        private const float Sy = 1080f / 848f;
+        // Koordinat tata letak = piksel gambar latar 480 x 270 (asal kiri-atas), dikali 4 ke kanvas 1920 x 1080.
+        private const string BackgroundPath = "Assets/Art/Backgrounds/bg-food-truck.png";
+        private const float Sx = 4f;
+        private const float Sy = 4f;
 
         // nama, harga jual, alat, detik masak, bahan
         private static readonly (string name, int price, ToolType tool, float secs, string[] items)[] BaseRecipes =
@@ -51,9 +52,10 @@ namespace RollingKitchen.EditorTools
             var square = AssetDatabase.LoadAssetAtPath<Sprite>(BuildPasarScene.SquarePath);
             var itemPrefab = AssetDatabase.LoadAssetAtPath<Button>(ItemPrefabPath);
             var recipes = LoadRecipes();
-            if (square == null || itemPrefab == null || recipes.Length == 0)
+            var background = ArtLayout.ImportSprite(BackgroundPath, 25);
+            if (square == null || itemPrefab == null || recipes.Length == 0 || background == null)
             {
-                Debug.LogError("Gagal memuat sprite, prefab ShelfItem, atau resep.");
+                Debug.LogError("Gagal memuat sprite, prefab ShelfItem, resep, atau latar Food Truck.");
                 return;
             }
 
@@ -67,7 +69,7 @@ namespace RollingKitchen.EditorTools
 
             BuildPasarScene.SetupCamera();
             BuildPasarScene.BuildEventSystem();
-            BuildUi(square, itemPrefab, recipes);
+            BuildUi(square, background, itemPrefab, recipes);
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
@@ -205,24 +207,31 @@ namespace RollingKitchen.EditorTools
 
         // ---------- UI ----------
 
-        private static void BuildUi(Sprite square, Button itemPrefab, RecipeData[] recipes)
+        private static void BuildUi(Sprite square, Sprite background, Button itemPrefab, RecipeData[] recipes)
         {
-            var canvasGo = BuildPasarScene.CreateCanvasWithHud("Klik alat -> klik bahan di rak -> QTE (Q/W/E/R atau klik) -> klik alat ambil hidangan -> klik wadah -> klik pelanggan", out _);
+            var canvasGo = BuildPasarScene.CreateCanvasWithHud("Q/W/E/R: QTE   Spasi: skill koki   Esc: jeda", out _);
             var root = canvasGo.transform;
 
-            // Latar belakang truk.
-            Panel(root, square, "Latar", 0, 0, 1549, 848, new Color(0.25f, 0.18f, 0.14f), false).transform.SetAsFirstSibling();
+            // Food Truck sudah punya rak sendiri: bar stok HUD tidak perlu.
+            var hud = canvasGo.GetComponentInChildren<HudView>();
+            var hso = new SerializedObject(hud);
+            hso.FindProperty("showStock").boolValue = false;
+            hso.ApplyModifiedPropertiesWithoutUndo();
 
-            // Rak bahan: 3 baris (Sayur / Daging+Ikan / Lainnya).
-            Panel(root, square, "Rak", 38, 98, 503, 622, new Color(0.12f, 0.12f, 0.14f), false);
+            // Latar belakang truk (pixel art 480x270, direntangkan tepat 4x).
+            var bg = Panel(root, square, "Latar", 0, 0, 480, 270, Color.white, false);
+            bg.GetComponent<Image>().sprite = background;
+            bg.transform.SetAsFirstSibling();
+
+            // Rak bahan: 3 bukaan lemari kiri (Sayur / Daging+Ikan / Lainnya).
             var shelves = new Transform[3];
-            var shelfRects = new[] { new Vector4(65, 133, 465, 227), new Vector4(63, 258, 472, 346), new Vector4(66, 377, 472, 455) };
+            var shelfRects = new[] { new Vector4(17, 36, 155, 71), new Vector4(17, 78, 155, 109), new Vector4(17, 116, 155, 147) };
             for (int i = 0; i < 3; i++)
             {
-                var s = Panel(root, square, $"Rak {i + 1}", shelfRects[i].x, shelfRects[i].y, shelfRects[i].z, shelfRects[i].w, new Color(0.6f, 0.3f, 0.65f, 0.55f), false);
+                var s = Panel(root, square, $"Rak {i + 1}", shelfRects[i].x, shelfRects[i].y, shelfRects[i].z, shelfRects[i].w, new Color(0f, 0f, 0f, 0f), false);
                 var h = s.AddComponent<HorizontalLayoutGroup>();
-                h.spacing = 6f;
-                h.padding = new RectOffset(6, 6, 6, 6);
+                h.spacing = 4f;
+                h.padding = new RectOffset(4, 4, 4, 4);
                 h.childAlignment = TextAnchor.MiddleLeft;
                 h.childControlWidth = h.childControlHeight = true;
                 h.childForceExpandWidth = false;
@@ -230,64 +239,63 @@ namespace RollingKitchen.EditorTools
                 shelves[i] = s.transform;
             }
 
-            // Saus (dekorasi).
-            Panel(root, square, "Saus 1", 243, 522, 277, 662, new Color(0.55f, 0.1f, 0.15f), false);
-            Panel(root, square, "Saus 2", 334, 563, 371, 679, new Color(0.55f, 0.1f, 0.15f), false);
-            Panel(root, square, "Saus 3", 394, 522, 469, 667, new Color(0.55f, 0.1f, 0.15f), false);
-
-            // Jendela pelanggan.
-            Panel(root, square, "Jendela", 548, 97, 1293, 615, new Color(0.95f, 0.6f, 0.25f, 0.35f), false);
+            // Pelanggan di jendela (kaca x172-402, y30-190).
             var slots = new[]
             {
-                MakeCustomer(root, square, 585, 120, "Pelanggan 1"),
-                MakeCustomer(root, square, 800, 160, "Pelanggan 2"),
-                MakeCustomer(root, square, 1015, 120, "Pelanggan 3"),
+                MakeCustomer(root, square, 180, 54, "Pelanggan 1"),
+                MakeCustomer(root, square, 257, 46, "Pelanggan 2"),
+                MakeCustomer(root, square, 334, 54, "Pelanggan 3"),
             };
 
-            // Tiket pesanan dan kain (kanan).
-            var tickets = Panel(root, square, "Tiket", 1305, 40, 1545, 330, new Color(1f, 0.97f, 0.8f, 0.92f), false);
+            // Tiket pesanan di kertas kanan atas; celemek = Kain pembersih.
+            var tickets = Panel(root, square, "Tiket", 407, 18, 478, 100, new Color(1f, 0.97f, 0.82f, 0.93f), false);
             var ticketText = BuildPasarScene.MakeText(tickets.transform, "Teks", 18, TextAlignmentOptions.TopLeft, 0f);
             ticketText.color = Color.black;
+            ticketText.enableAutoSizing = true;
+            ticketText.fontSizeMin = 12;
+            ticketText.fontSizeMax = 18;
             BuildPasarScene.Stretch(ticketText.rectTransform);
             ticketText.rectTransform.offsetMin = new Vector2(8, 8);
             ticketText.rectTransform.offsetMax = new Vector2(-8, -8);
-            var cloth = Panel(root, square, "Kain", 1330, 345, 1450, 470, new Color(0.8f, 0.85f, 0.9f), true);
-            var clothLabel = BuildPasarScene.MakeText(cloth.transform, "Label", 24, TextAlignmentOptions.Center, 0f);
-            clothLabel.text = "Kain";
-            clothLabel.color = Color.black;
-            BuildPasarScene.Stretch(clothLabel.rectTransform);
+            var cloth = Panel(root, square, "Kain", 412, 104, 454, 153, new Color(1f, 1f, 1f, 0f), true);
+            Caption(cloth.transform, "Kain (bersihkan)");
 
-            // Alat masak.
+            // Alat masak di meja: dua kompor + talenan di atas laci.
             var toolSlots = new[]
             {
-                MakeTool(root, square, ToolType.Penggorengan, 520, 653, 741, 785),
-                MakeTool(root, square, ToolType.Panci, 790, 653, 990, 785),
-                MakeTool(root, square, ToolType.Talenan, 1030, 647, 1170, 789),
+                MakeTool(root, square, ToolType.Penggorengan, 158, 205, 236, 256),
+                MakeTool(root, square, ToolType.Panci, 242, 205, 313, 256),
+                MakeTool(root, square, ToolType.Talenan, 316, 203, 367, 256),
             };
 
-            // Wadah hidangan (kanan bawah).
-            var wadah = Panel(root, square, "Wadah", 1190, 640, 1545, 800, new Color(0.9f, 0.9f, 0.9f, 0.9f), false);
+            // Wadah hidangan: meja baja kanan bawah.
+            var wadah = Panel(root, square, "Wadah", 370, 206, 478, 256, new Color(0f, 0f, 0f, 0.25f), false);
             var wh = wadah.AddComponent<HorizontalLayoutGroup>();
-            wh.spacing = 6f;
-            wh.padding = new RectOffset(8, 8, 8, 8);
+            wh.spacing = 4f;
+            wh.padding = new RectOffset(6, 6, 6, 6);
             wh.childControlWidth = wh.childControlHeight = true;
             wh.childForceExpandWidth = false;
             wh.childForceExpandHeight = true;
-            var wadahLabel = BuildPasarScene.MakeText(root, "Label Wadah", 20, TextAlignmentOptions.Left, 0f);
-            Place(wadahLabel.rectTransform, 1190, 612, 1400, 640);
-            wadahLabel.text = "Wadah (klik hidangan lalu pelanggan)";
+            var wadahLabel = BuildPasarScene.MakeText(root, "Label Wadah", 18, TextAlignmentOptions.BottomLeft, 0f);
+            Place(wadahLabel.rectTransform, 370, 196, 478, 205);
+            wadahLabel.text = "Wadah: klik hidangan, lalu pelanggan";
+
+            // Skill koki: meja kiri bawah (tombol dibuat FoodTruckController).
+            var skillArea = Panel(root, square, "Skill", 6, 212, 152, 252, new Color(0f, 0f, 0f, 0f), false);
 
             // Teks status.
             var timer = BuildPasarScene.MakeText(root, "Waktu", 30, TextAlignmentOptions.Center, 0f);
-            Place(timer.rectTransform, 700, 60, 1140, 100);
+            Place(timer.rectTransform, 230, 36, 346, 46);
             var combo = BuildPasarScene.MakeText(root, "Combo", 30, TextAlignmentOptions.Center, 0f);
             combo.color = new Color(1f, 0.9f, 0.3f);
-            Place(combo.rectTransform, 560, 618, 1280, 650);
+            Place(combo.rectTransform, 172, 170, 402, 180);
             var message = BuildPasarScene.MakeText(root, "Pesan", 26, TextAlignmentOptions.Center, 0f);
-            Place(message.rectTransform, 470, 800, 1300, 840);
+            Place(message.rectTransform, 140, 186, 440, 197);
+            var mbg = Panel(root, square, "Pesan BG", 140, 186, 440, 197, new Color(0f, 0f, 0f, 0.45f), false);
+            mbg.transform.SetSiblingIndex(message.transform.GetSiblingIndex());
 
             // Ringkasan akhir servis.
-            var summary = Panel(root, square, "Ringkasan", 450, 200, 1100, 650, new Color(0.05f, 0.05f, 0.08f, 0.96f), false);
+            var summary = Panel(root, square, "Ringkasan", 130, 50, 350, 200, new Color(0.05f, 0.05f, 0.08f, 0.97f), false);
             var sText = BuildPasarScene.MakeText(summary.transform, "Teks", 34, TextAlignmentOptions.Center, 0f);
             BuildPasarScene.Stretch(sText.rectTransform);
             sText.rectTransform.offsetMax = new Vector2(0, -20);
@@ -341,6 +349,7 @@ namespace RollingKitchen.EditorTools
             so.FindProperty("summaryPanel").objectReferenceValue = summary;
             so.FindProperty("summaryText").objectReferenceValue = sText;
             so.FindProperty("continueButton").objectReferenceValue = cont.GetComponent<Button>();
+            so.FindProperty("skillArea").objectReferenceValue = skillArea.transform;
             var rp = so.FindProperty("allRecipes");
             rp.arraySize = recipes.Length;
             for (int i = 0; i < recipes.Length; i++) rp.GetArrayElementAtIndex(i).objectReferenceValue = recipes[i];
@@ -350,27 +359,35 @@ namespace RollingKitchen.EditorTools
         private static FoodTruckController.CustomerSlot MakeCustomer(Transform root, Sprite square, float x, float y, string name)
         {
             var slot = new FoodTruckController.CustomerSlot();
-            var go = Panel(root, square, name, x, y, x + 200, y + 440, new Color(0, 0, 0, 0), false);
+            // Satuan = piksel latar (x4 di layar); slot 64 x 134.
+            var go = Panel(root, square, name, x, y, x + 64, y + 134, new Color(0, 0, 0, 0), false);
             slot.root = go;
 
-            // Bar kesabaran + nama + pesanan di atas kepala.
-            var barBg = Panel(go.transform, square, "Kesabaran BG", 0, 0, 190, 14, new Color(0.15f, 0.15f, 0.15f, 0.9f), false);
-            var fill = Panel(barBg.transform, square, "Kesabaran", 0, 0, 190, 14, new Color(0.3f, 0.85f, 0.4f), false);
+            // Papan info di atas kepala: bar kesabaran + nama/tipe + pesanan.
+            var info = Panel(go.transform, square, "Info", 0, 0, 64, 34, new Color(0.05f, 0.05f, 0.08f, 0.75f), false);
+            var barBg = Panel(info.transform, square, "Kesabaran BG", 2, 2, 62, 5, new Color(0.15f, 0.15f, 0.15f, 0.9f), false);
+            var fill = Panel(barBg.transform, square, "Kesabaran", 0, 0, 60, 3, new Color(0.3f, 0.85f, 0.4f), false);
             BuildPasarScene.Stretch((RectTransform)fill.transform);
             var img = fill.GetComponent<Image>();
             img.type = Image.Type.Filled;
             img.fillMethod = Image.FillMethod.Horizontal;
             slot.patienceFill = img;
 
-            slot.nameText = BuildPasarScene.MakeText(go.transform, "Nama", 22, TextAlignmentOptions.Center, 0f);
-            Place(slot.nameText.rectTransform, 0, 18, 190, 46);
-            slot.orderText = BuildPasarScene.MakeText(go.transform, "Pesanan", 22, TextAlignmentOptions.Center, 0f);
+            slot.nameText = BuildPasarScene.MakeText(info.transform, "Nama", 20, TextAlignmentOptions.Center, 0f);
+            slot.nameText.enableAutoSizing = true;
+            slot.nameText.fontSizeMin = 12;
+            slot.nameText.fontSizeMax = 20;
+            Place(slot.nameText.rectTransform, 1, 7, 63, 21);
+            slot.orderText = BuildPasarScene.MakeText(info.transform, "Pesanan", 20, TextAlignmentOptions.Center, 0f);
             slot.orderText.color = new Color(1f, 0.95f, 0.5f);
-            Place(slot.orderText.rectTransform, 0, 46, 190, 76);
+            slot.orderText.enableAutoSizing = true;
+            slot.orderText.fontSizeMin = 12;
+            slot.orderText.fontSizeMax = 20;
+            Place(slot.orderText.rectTransform, 1, 22, 63, 33);
 
-            // Kepala + badan (klik badan untuk menyajikan).
-            Panel(go.transform, square, "Kepala", 55, 90, 135, 170, new Color(0.9f, 0.75f, 0.6f), false);
-            var body = Panel(go.transform, square, "Badan", 40, 175, 150, 440, new Color(0.35f, 0.5f, 0.8f), true);
+            // Kepala + badan (klik badan untuk menyajikan); warna badan = tipe pelanggan.
+            Panel(go.transform, square, "Kepala", 22, 40, 42, 60, new Color(0.9f, 0.75f, 0.6f), false);
+            var body = Panel(go.transform, square, "Badan", 16, 61, 48, 134, new Color(0.35f, 0.5f, 0.8f), true);
             slot.button = body.GetComponent<Button>();
             return slot;
         }
@@ -378,10 +395,11 @@ namespace RollingKitchen.EditorTools
         private static FoodTruckController.ToolSlot MakeTool(Transform root, Sprite square, ToolType tool, float x1, float y1, float x2, float y2)
         {
             var slot = new FoodTruckController.ToolSlot { tool = tool };
-            var go = Panel(root, square, tool.ToString(), x1, y1, x2, y2, new Color(0.7f, 0.7f, 0.75f), true);
+            // Tombol transparan di atas gambar alat (Image alpha 0 tetap menerima klik).
+            var go = Panel(root, square, tool.ToString(), x1, y1, x2, y2, new Color(1f, 1f, 1f, 0f), true);
             slot.button = go.GetComponent<Button>();
 
-            var hl = Panel(go.transform, square, "Sorotan", 0, 0, 10, 10, new Color(1f, 0.9f, 0.2f, 0.45f), false);
+            var hl = Panel(go.transform, square, "Sorotan", 0, 0, 10, 10, new Color(1f, 0.9f, 0.2f, 0.3f), false);
             BuildPasarScene.Stretch((RectTransform)hl.transform);
             hl.GetComponent<Image>().raycastTarget = false;
             slot.highlight = hl.GetComponent<Image>();
@@ -400,8 +418,18 @@ namespace RollingKitchen.EditorTools
             pi.raycastTarget = false;
             slot.progress = pi;
 
-            slot.status = BuildPasarScene.MakeText(go.transform, "Status", 20, TextAlignmentOptions.Center, 0f);
-            slot.status.color = Color.black;
+            // Status di pita gelap bawah alat agar terbaca di atas gambar.
+            var strip = Panel(go.transform, square, "Pita Status", 0, 0, 10, 10, new Color(0f, 0f, 0f, 0.6f), false);
+            var srt = (RectTransform)strip.transform;
+            srt.anchorMin = new Vector2(0, 0);
+            srt.anchorMax = new Vector2(1, 0);
+            srt.pivot = new Vector2(0.5f, 0);
+            srt.offsetMin = new Vector2(0, 14);
+            srt.offsetMax = new Vector2(0, 70);
+            slot.status = BuildPasarScene.MakeText(strip.transform, "Status", 18, TextAlignmentOptions.Center, 0f);
+            slot.status.enableAutoSizing = true;
+            slot.status.fontSizeMin = 12;
+            slot.status.fontSizeMax = 18;
             BuildPasarScene.Stretch(slot.status.rectTransform);
 
             // Prompt QTE di atas alat (tombol, bisa diklik sebagai pengganti keyboard).
@@ -417,6 +445,24 @@ namespace RollingKitchen.EditorTools
         }
 
         // ---------- Util ----------
+
+        // Label kecil di pita gelap bagian bawah sebuah tombol transparan.
+        private static void Caption(Transform parent, string text)
+        {
+            var go = new GameObject("Keterangan", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            go.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.6f);
+            go.GetComponent<Image>().raycastTarget = false;
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0, 0);
+            rt.anchorMax = new Vector2(1, 0);
+            rt.pivot = new Vector2(0.5f, 0);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = new Vector2(0, 30);
+            var t = BuildPasarScene.MakeText(go.transform, "Teks", 18, TextAlignmentOptions.Center, 0f);
+            t.text = text;
+            BuildPasarScene.Stretch(t.rectTransform);
+        }
 
         // Panel berwarna di posisi sketsa (px kiri-atas ke kanan-bawah); opsional dijadikan tombol.
         private static GameObject Panel(Transform parent, Sprite square, string name, float x1, float y1, float x2, float y2, Color color, bool button)

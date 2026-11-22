@@ -186,8 +186,39 @@ namespace RollingKitchen.EditorTools
             kitchen.transform.position = Art.ToWorld(115, 40);
             station = kitchen.AddComponent<KitchenStation>();
 
+            // Kasur = simpan permainan (didekati dari kaki kasur).
+            var bed = new GameObject("Kasur (Simpan)");
+            bed.transform.SetParent(world.transform, false);
+            bed.transform.position = Art.ToWorld(431, 104);
+            bed.AddComponent<Bed>();
+
+            // Papan target: papan gabus di dinding ruang tamu (di atas meja makan), dibaca dari bawahnya.
+            var board = BuildPasarScene.MakeBlock(world.transform, square, "Papan Target (gambar)", Art.ToWorld(150, 117),
+                new Vector2(1.6f, 0.5f), new Color(0.62f, 0.42f, 0.24f), 0f, 1, false);
+            var boardText = new GameObject("Teks");
+            boardText.transform.SetParent(board.transform, false);
+            boardText.transform.localScale = new Vector3(1f / 1.6f, 1f / 0.5f, 1f);
+            var bt = boardText.AddComponent<TextMeshPro>();
+            bt.text = "TARGET";
+            bt.fontSize = 2.6f;
+            bt.fontStyle = FontStyles.Bold;
+            bt.alignment = TextAlignmentOptions.Center;
+            bt.color = new Color(1f, 0.95f, 0.8f);
+            bt.sortingOrder = 2;
+            ((RectTransform)boardText.transform).sizeDelta = new Vector2(1.6f, 0.5f);
+            var boardSpot = new GameObject("Papan Target");
+            boardSpot.transform.SetParent(world.transform, false);
+            boardSpot.transform.position = Art.ToWorld(150, 136);
+            boardSpot.AddComponent<TargetBoard>();
+
+            // Buku resep: dudukan buku di ruang tamu (didekati dari bawahnya).
+            var book = new GameObject("Buku Resep");
+            book.transform.SetParent(world.transform, false);
+            book.transform.position = Art.ToWorld(196, 160);
+            book.AddComponent<RecipeBookStand>();
+
             // Pemain mulai di ruang tamu, dekat pintu Pasar.
-            return BuildPasarScene.MakePlayer(world.transform, square, Art.ToWorld(60, 190), new Vector2(0.64f, 0.88f));
+            return BuildPasarScene.MakePlayer(world.transform, square, Art.ToWorld(60, 190), PlayerSprites.Ppu / Art.Ppu);
         }
 
         private static void MakeDoor(Transform parent, string name, Vector2 pos, GameScene target, string label,

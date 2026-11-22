@@ -37,6 +37,7 @@ namespace RollingKitchen
             [NonSerialized] public int nextQte;
             [NonSerialized] public float qteTimeLeft;
             [NonSerialized] public Key qteKey;
+            [NonSerialized] public int failStreak;  // QTE gagal beruntun untuk hidangan ini (2 = gosong)
         }
 
         [Serializable]
@@ -49,6 +50,7 @@ namespace RollingKitchen
             public Image patienceFill;
 
             [NonSerialized] public bool active;
+            [NonSerialized] public CustomerType type;
             [NonSerialized] public RecipeData order;
             [NonSerialized] public float patience;
             [NonSerialized] public float patienceMax;
@@ -74,6 +76,8 @@ namespace RollingKitchen
         [SerializeField] private GameObject summaryPanel;
         [SerializeField] private TMP_Text summaryText;
         [SerializeField] private Button continueButton;
+        [Tooltip("Area ikon skill koki (tombol dibuat dari kode).")]
+        [SerializeField] private RectTransform skillArea;
 
         [Header("Data")]
         [Tooltip("Semua resep (dasar + spesial). Spesial hanya muncul bila sudah terbuka.")]
@@ -84,6 +88,22 @@ namespace RollingKitchen
         [SerializeField] private float daySeconds = 60f;
         [SerializeField] private float qteWindow = 1.5f;
         [SerializeField] private int maxDishes = 4;
+        [SerializeField] private float skillSeconds = 8f;
+        [Tooltip("Tip = harga x (bagian ini x sisa kesabaran + 3% per combo, maks 6) x pengali tipe.")]
+        [SerializeField] private float speedTip = 0.15f;
+        [SerializeField] private float comboTip = 0.03f;
+
+        // ---- Skill koki: aktif sekali per servis selama skillSeconds ----
+        private class Skill
+        {
+            public string name, desc;
+            public bool unlocked, used;
+            public float timeLeft;
+            public Button button;
+            public TMP_Text label;
+            public bool Active => timeLeft > 0f;
+        }
+        private Skill quickHands, calm;
 
         private static readonly Key[] QteKeys = { Key.Q, Key.W, Key.E, Key.R };
         private static readonly string[] Names = { "Budi", "Sari", "Andi", "Rina", "Dewi", "Joko", "Maya", "Tono" };
@@ -146,6 +166,10 @@ namespace RollingKitchen
             continueButton.onClick.AddListener(Continue);
             summaryPanel.SetActive(false);
 
+            quickHands = new Skill { name = "Tangan Cepat", desc = "masak 2x", unlocked = gm.QuickHandsUnlocked };
+            calm = new Skill { name = "Tenang", desc = "kesabaran berhenti", unlocked = gm.CalmUnlocked };
+            BuildSkills();
+
             gm.Inventory.Changed += OnInventoryChanged;
             RebuildShelf();
             RebuildDishes();
@@ -174,10 +198,15 @@ namespace RollingKitchen
         {
             if (finished || PauseMenu.IsPaused) return;
 
+            // Layar ini dimainkan dengan mouse: jangan biarkan tombol terpilih ikut "diklik" oleh Spasi/Enter.
+            var es = UnityEngine.EventSystems.EventSystem.current;
+            if (es && es.currentSelectedGameObject) es.SetSelectedGameObject(null);
+
             timeLeft -= Time.deltaTime;
             if (timerText) timerText.text = $"Waktu {Mathf.CeilToInt(Mathf.Max(0, timeLeft))}s";
             if (timeLeft <= 0f) { Finish(); return; }
 
+            UpdateSkills();
             UpdateSpawning();
             UpdateCustomers();
             foreach (var t in tools) UpdateTool(t);
@@ -202,11 +231,15 @@ namespace RollingKitchen
             if (free != null && active < maxCustomers)
             {
                 free.active = true;
-                free.order = menu[UnityEngine.Random.Range(0, menu.Count)];
-                free.patienceMax = Mathf.Max(10f, patienceBase);
+                free.type = CustomerTypes.Roll(menu.Any(r => r.isSpecial));
+                free.order = PickOrder(free.type);
+                free.patienceMax = Mathf.Max(8f, patienceBase * CustomerTypes.Patience(free.type));
                 free.patience = free.patienceMax;
-                free.nameText.text = Names[UnityEngine.Random.Range(0, Names.Length)];
+                string who = Names[UnityEngine.Random.Range(0, Names.Length)];
+                free.nameText.text = $"{who} <size=80%><color=#FFD24D>{CustomerTypes.Label(free.type)}</color></size>";
                 free.orderText.text = free.order.displayName;
+                var body = free.button.GetComponent<Image>();
+                if (body) body.color = CustomerTypes.BodyColor(free.type);
                 free.root.SetActive(true);
                 RefreshTickets();
             }
@@ -218,15 +251,16 @@ namespace RollingKitchen
             foreach (var c in customers)
             {
                 if (!c.active) continue;
-                c.patience -= Time.deltaTime;
+                if (!calm.Active) c.patience -= Time.deltaTime; // skill Tenang menghentikan kesabaran
                 c.patienceFill.fillAmount = Mathf.Clamp01(c.patience / c.patienceMax);
                 if (c.patience <= 0f)
                 {
                     c.active = false;
                     c.root.SetActive(false);
                     lost++;
+                    gm.Stats.customersLost++;
                     combo = 0;
-                    Say($"{c.nameText.text} pergi karena kelamaan menunggu.");
+                    Say($"{FirstLine(c.nameText.text)} pergi karena kelamaan menunggu.");
                     RefreshTickets();
                 }
             }
@@ -239,18 +273,37 @@ namespace RollingKitchen
             if (selectedDish < 0) { Say("Pilih hidangan di wadah dulu."); return; }
 
             var dish = dishes[selectedDish];
-            if (dish.recipe != c.order) { Say($"{c.nameText.text} tidak memesan {dish.recipe.displayName}."); return; }
+            string who = FirstLine(c.nameText.text);
+            int basePay = Mathf.RoundToInt(dish.recipe.sellPrice * (0.8f + 0.4f * dish.quality));
 
-            float patienceBonus = c.patience / c.patienceMax > 0.5f ? 1.1f : 1f;
-            float comboBonus = 1f + 0.05f * Mathf.Min(combo, 6);
-            int pay = Mathf.RoundToInt(dish.recipe.sellPrice * (0.8f + 0.4f * dish.quality) * comboBonus * patienceBonus);
-
-            gm.AddRevenue(pay);
-            int bonus = gm.RegisterServedDish(dish.quality >= 0.999f);
-            revenue += pay;
-            served++;
-            combo++;
-            Say(bonus > 0 ? $"+Rp {pay}  Sempurna! +{bonus} poin" : $"+Rp {pay}");
+            if (dish.recipe != c.order)
+            {
+                // Salah sajian tetap diterima, tapi dibayar separuh, tanpa tip, dan combo putus.
+                int half = Mathf.Max(1, basePay / 2);
+                gm.AddRevenue(half);
+                gm.Stats.wrongServes++;
+                revenue += half;
+                served++;
+                combo = 0;
+                Say($"{who} memesan {c.order.displayName}, bukan {dish.recipe.displayName}. Dibayar separuh: +Rp {half}");
+            }
+            else
+            {
+                // Tip = bonus kecepatan (sisa kesabaran) + combo; Royal memberi dua kali lipat.
+                float speed = Mathf.Clamp01(c.patience / c.patienceMax);
+                int tip = Mathf.RoundToInt(dish.recipe.sellPrice * (speedTip * speed + comboTip * Mathf.Min(combo, 6))
+                                           * CustomerTypes.Tip(c.type));
+                int pay = basePay + tip;
+                gm.AddRevenue(pay);
+                gm.Stats.customersServed++;
+                gm.Stats.AddDish(dish.recipe);
+                int bonus = gm.RegisterServedDish(dish.quality >= 0.999f);
+                revenue += pay;
+                served++;
+                combo++;
+                string tipText = tip > 0 ? $" (tip Rp {tip})" : "";
+                Say(bonus > 0 ? $"+Rp {pay}{tipText}  Sempurna! +{bonus} poin" : $"+Rp {pay}{tipText}");
+            }
 
             dishes.RemoveAt(selectedDish);
             selectedDish = -1;
@@ -329,6 +382,7 @@ namespace RollingKitchen
                 selectedTool.time = 0f;
                 selectedTool.quality = 0f;
                 selectedTool.nextQte = 0;
+                selectedTool.failStreak = 0;
                 Say($"Memasak {match.displayName}...");
             }
             RefreshTools();
@@ -338,15 +392,15 @@ namespace RollingKitchen
         {
             if (t.state != ToolState.Cooking) return;
 
-            t.time += Time.deltaTime;
-            float total = Mathf.Max(0.5f, t.recipe.cookSeconds);
+            t.time += Time.deltaTime * (quickHands.Active ? 2f : 1f); // skill Tangan Cepat
+            float total = Mathf.Max(0.5f, t.recipe.cookSeconds * gm.Upgrades.CookMultiplier(t.tool));
             if (t.progress) t.progress.fillAmount = Mathf.Clamp01(t.time / total);
 
             // Jendela QTE pada pecahan waktu masak yang rata.
             if (!t.qtePrompt.activeSelf && t.nextQte < qteCount && t.time >= total * (t.nextQte + 1f) / (qteCount + 1f))
             {
                 t.qteKey = QteKeys[UnityEngine.Random.Range(0, QteKeys.Length)];
-                t.qteTimeLeft = qteWindow;
+                t.qteTimeLeft = qteWindow * gm.Upgrades.QteMultiplier(t.tool);
                 t.qteText.text = $"Tekan {t.qteKey}!";
                 t.qtePrompt.SetActive(true);
             }
@@ -367,9 +421,11 @@ namespace RollingKitchen
                 if (t.qtePrompt.activeSelf && t.qteTimeLeft <= 0f) ResolveQte(t, false);
             }
 
-            if (t.state == ToolState.Cooking && t.time >= total)
+            if (t.state != ToolState.Cooking) return; // gosong saat QTE
+            if (t.time >= total)
             {
                 if (t.qtePrompt.activeSelf) ResolveQte(t, false);
+                if (t.state != ToolState.Cooking) return;
                 t.state = ToolState.Done;
                 Say($"{t.recipe.displayName} siap! Klik alat untuk memindahkan ke wadah.");
                 RefreshTools();
@@ -382,8 +438,22 @@ namespace RollingKitchen
             t.qtePrompt.SetActive(false);
             t.nextQte++;
             int delta = gm.RegisterQte(success);
-            if (success) { combo++; t.quality += 1f / qteCount; }
-            else { combo = 0; Say(delta < 0 ? $"QTE gagal beruntun! {delta} poin" : "QTE gagal!"); }
+            if (success) { combo++; t.quality += 1f / qteCount; t.failStreak = 0; return; }
+
+            combo = 0;
+            t.failStreak++;
+            if (t.failStreak >= 2)
+            {
+                // Gosong: hidangan dibuang, alat kotor, bahan (sudah terpakai) hilang.
+                gm.Stats.burntDishes++;
+                Say($"{t.recipe.displayName} GOSONG! Dibuang, alat kotor." + (delta < 0 ? $" {delta} poin" : ""));
+                t.state = ToolState.Dirty;
+                t.recipe = null;
+                t.contents.Clear();
+                RefreshTools();
+                return;
+            }
+            Say(delta < 0 ? $"QTE gagal beruntun! {delta} poin" : "QTE gagal! Sekali lagi bisa gosong.");
         }
 
         private void OnClothClicked()
@@ -458,6 +528,8 @@ namespace RollingKitchen
                 var parent = shelfParents[Mathf.Min(ShelfIndex(item.category), shelfParents.Length - 1)];
                 var b = Instantiate(listItemPrefab, parent);
                 b.GetComponentInChildren<TMP_Text>().text = $"{item.displayName}\nx{kv.Value}";
+                // Bahan yang basi setelah hari ini: ikon berubah warna sebagai peringatan.
+                if (gm.Inventory.CountExpiringAfter(item, gm.Day) > 0) b.GetComponent<Image>().color = new Color(1f, 0.65f, 0.3f, 0.95f);
                 b.onClick.AddListener(() => AddIngredient(item));
             }
         }
@@ -487,8 +559,11 @@ namespace RollingKitchen
                 c.active = false;
                 c.root.SetActive(false);
                 lost++;
+                gm.Stats.customersLost++;
             }
             foreach (var t in tools) t.qtePrompt.SetActive(false);
+            quickHands.timeLeft = calm.timeLeft = 0f;
+            RefreshSkills();
 
             summaryText.text = $"{(night ? "Servis Malam" : "Servis Siang-Sore")} selesai!\n\n" +
                                $"Disajikan: {served}\nPelanggan pergi: {lost}\nPendapatan: Rp {revenue:N0}\n" +
@@ -502,6 +577,112 @@ namespace RollingKitchen
             // Setelah siang-sore: maju ke Malam dan kembali ke Rumah.
             gm.AdvancePhase();
             SceneLoader.Load(night ? GameScene.Rekap : GameScene.Rumah);
+        }
+
+        // ---------------- Pesanan berbobot karakter ----------------
+
+        /// <summary>
+        /// Pilih pesanan dari menu terbuka sesuai tipe: Pemilih minta resep spesial, Terburu-buru suka yang cepat
+        /// dimasak, Royal suka yang mahal, Sabar acak. Resep yang bahannya tersedia di rak diberi bobot lebih.
+        /// </summary>
+        private RecipeData PickOrder(CustomerType type)
+        {
+            var pool = type == CustomerType.Pemilih && menu.Any(r => r.isSpecial) ? menu.Where(r => r.isSpecial).ToList() : menu;
+            var weights = pool.Select(r =>
+            {
+                float w = 1f;
+                if (type == CustomerType.TerburuBuru) w = 10f / Mathf.Max(1f, r.cookSeconds);
+                else if (type == CustomerType.Royal) w = Mathf.Max(1f, r.sellPrice) / 40f;
+                return CanCook(r) ? w * 3f : w;
+            }).ToList();
+
+            float roll = UnityEngine.Random.value * weights.Sum();
+            for (int i = 0; i < pool.Count; i++)
+            {
+                roll -= weights[i];
+                if (roll <= 0f) return pool[i];
+            }
+            return pool[pool.Count - 1];
+        }
+
+        private bool CanCook(RecipeData r)
+        {
+            if (r.ingredients == null) return false;
+            foreach (var e in r.ingredients)
+                if (e.ingredient != null && !gm.Inventory.Has(e.ingredient, Mathf.Max(1, e.amount))) return false;
+            return true;
+        }
+
+        // Nama pelanggan tanpa label tipe (label diawali spasi + tag ukuran).
+        private static string FirstLine(string s)
+        {
+            int i = s.IndexOf(" <size", System.StringComparison.Ordinal);
+            return i < 0 ? s : s.Substring(0, i);
+        }
+
+        // ---------------- Skill koki ----------------
+
+        private void BuildSkills()
+        {
+            if (!skillArea) return;
+            var h = skillArea.GetComponent<HorizontalLayoutGroup>();
+            if (!h) h = skillArea.gameObject.AddComponent<HorizontalLayoutGroup>();
+            h.spacing = 12f;
+            h.childControlWidth = h.childControlHeight = true;
+            h.childForceExpandWidth = h.childForceExpandHeight = true;
+            foreach (var s in new[] { quickHands, calm })
+            {
+                var skill = s;
+                skill.button = RuntimeUi.Button(skillArea, skill.name, RuntimeUi.Blue, () => Activate(skill), 0f, 22f);
+                skill.label = RuntimeUi.Label(skill.button);
+            }
+            RefreshSkills();
+        }
+
+        private void UpdateSkills()
+        {
+            // Spasi memakai skill berikutnya yang belum dipakai (Tangan Cepat dulu, lalu Tenang).
+            var kb = Keyboard.current;
+            if (kb != null && kb.spaceKey.wasPressedThisFrame)
+            {
+                var next = new[] { quickHands, calm }.FirstOrDefault(s => s.unlocked && !s.used);
+                if (next != null) Activate(next);
+            }
+
+            bool changed = false;
+            foreach (var s in new[] { quickHands, calm })
+            {
+                if (!s.Active) continue;
+                s.timeLeft -= Time.deltaTime;
+                if (s.timeLeft <= 0f) { s.timeLeft = 0f; Say($"{s.name} selesai."); }
+                changed = true;
+            }
+            if (changed) RefreshSkills();
+        }
+
+        private void Activate(Skill s)
+        {
+            if (finished) return;
+            if (!s.unlocked) { Say($"{s.name} terbuka mulai hari {(s == quickHands ? GameManager.QuickHandsDay : GameManager.CalmDay)}."); return; }
+            if (s.used) { Say($"{s.name} sudah dipakai di servis ini."); return; }
+            s.used = true;
+            s.timeLeft = skillSeconds;
+            Say($"{s.name} aktif: {s.desc} selama {skillSeconds:0} detik!");
+            RefreshSkills();
+        }
+
+        private void RefreshSkills()
+        {
+            foreach (var s in new[] { quickHands, calm })
+            {
+                if (s == null || !s.button) continue;
+                string state = !s.unlocked ? $"terbuka hari {(s == quickHands ? GameManager.QuickHandsDay : GameManager.CalmDay)}"
+                             : s.Active ? $"AKTIF {Mathf.CeilToInt(s.timeLeft)}s"
+                             : s.used ? "sudah dipakai" : $"{s.desc} (Spasi)";
+                s.label.text = $"{s.name}\n<size=75%>{state}</size>";
+                s.button.interactable = s.unlocked && (!s.used || s.Active); // tetap terang selama aktif
+                s.button.GetComponent<Image>().color = s.Active ? new Color(1f, 0.75f, 0.2f) : RuntimeUi.Blue;
+            }
         }
 
         private void Say(string text)

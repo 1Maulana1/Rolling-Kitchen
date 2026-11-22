@@ -27,10 +27,11 @@ namespace RollingKitchen
         }
 
         /// <summary>Perbarui angka; baris meredup bila stok 0 (sesuai GDD).</summary>
-        public void Refresh(int price, int trend, int stock, bool canAfford)
+        public void Refresh(int price, int basePrice, int trend, int stock, bool canAfford)
         {
             string arrow = trend > 0 ? " <color=#E64D4D>▲</color>" : trend < 0 ? " <color=#4DCC66>▼</color>" : "";
-            if (priceText) priceText.text = $"Rp {price:N0}{arrow}";
+            string old = basePrice > price ? $"<size=75%><color=#999999><s>{basePrice:N0}</s></color></size> " : "";
+            if (priceText) priceText.text = $"{old}Rp {price:N0}{arrow}";
             if (stockText) stockText.text = $"x{stock}";
             if (buyButton) buyButton.interactable = canAfford;
 

@@ -77,6 +77,8 @@ namespace RollingKitchen
             // Peluang berhasil memakai pity global di GameManager (naik tiap gagal dengan kombinasi benar).
             bool success = match != null && Random.value <= gm.ExperimentChance;
             if (match != null) gm.RegisterExperiment(success);
+            gm.Stats.experimentsTried++;
+            if (success) gm.Stats.experimentsSucceeded++;
 
             if (success)
             {
