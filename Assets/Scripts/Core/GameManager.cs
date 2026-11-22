@@ -288,6 +288,7 @@ namespace RollingKitchen
             Inventory.Clear();
             Inventory.Today = day;
             boughtToday.Clear();
+            ExperimentHints.ResetVendorHints();
             Recipes.Clear();
             Upgrades.Clear();
             Stats.Clear();

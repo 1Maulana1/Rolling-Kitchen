@@ -121,6 +121,12 @@ namespace RollingKitchen
         private int combo, served, lost, revenue;
         private bool finished;
 
+        // Petunjuk eksperimen dari pelanggan: maks satu per servis, tampil sesudah pesan bayaran.
+        private bool hintGiven;
+        private string lastHint, queuedMessage;
+        private float queuedDelay;
+        private const float HintSeconds = 7f;
+
         private void Start()
         {
             gm = GameManager.Instance;
@@ -140,6 +146,14 @@ namespace RollingKitchen
             spawnInterval = night ? cfg.spawnInterval : cfg.spawnInterval * 1.5f;
             patienceBase = night ? cfg.patienceSeconds : cfg.patienceSeconds * 1.4f;
             spawnTimer = 1.5f;
+
+            // Bisikan petunjuk lebih panjang dari pesan biasa: kecilkan otomatis agar muat satu baris.
+            if (messageText)
+            {
+                messageText.enableAutoSizing = true;
+                messageText.fontSizeMin = 14f;
+                messageText.fontSizeMax = messageText.fontSize;
+            }
 
             // Hanya untuk uji scene langsung (GameManager "(uji)"): beri stok bila kosong.
             if (gm.name.Contains("(uji)") && !gm.Inventory.Items.Any()) GrantTestStock();
@@ -215,6 +229,11 @@ namespace RollingKitchen
             {
                 messageTimer -= Time.deltaTime;
                 if (messageTimer <= 0f) messageText.text = "";
+            }
+            if (queuedMessage != null && (queuedDelay -= Time.deltaTime) <= 0f)
+            {
+                Say(queuedMessage, HintSeconds);
+                queuedMessage = null;
             }
             if (comboText) comboText.text = combo > 1 ? $"Combo x{combo}" : "";
         }
@@ -302,6 +321,18 @@ namespace RollingKitchen
                 combo++;
                 string tipText = tip > 0 ? $" (tip Rp {tip})" : "";
                 Say($"+Rp {pay}{tipText}");
+
+                if (!hintGiven)
+                {
+                    string hint = ExperimentHints.TryCustomerHint(gm, c.type);
+                    if (hint != null)
+                    {
+                        hintGiven = true;
+                        lastHint = hint;
+                        queuedMessage = $"{who} berbisik: <color=#FFD24D>{hint}</color>";
+                        queuedDelay = 1.5f;
+                    }
+                }
             }
 
             dishes.RemoveAt(selectedDish);
@@ -565,7 +596,9 @@ namespace RollingKitchen
 
             summaryText.text = $"{(night ? "Servis Malam" : "Servis Siang-Sore")} selesai!\n\n" +
                                $"Disajikan: {served}\nPelanggan pergi: {lost}\nPendapatan: Rp {revenue:N0}\n" +
-                               $"Poin hari ini: {gm.TodayPoints} / target {gm.DailyTarget}";
+                               $"Poin hari ini: {gm.TodayPoints} / target {gm.DailyTarget}" +
+                               // Ulangi bisikan pelanggan supaya tidak terlewat bila tertimpa pesan lain.
+                               (lastHint != null ? $"\n\n<size=80%>Bisikan pelanggan: <color=#FFD24D>{lastHint}</color></size>" : "");
             summaryPanel.SetActive(true);
         }
 
@@ -683,11 +716,11 @@ namespace RollingKitchen
             }
         }
 
-        private void Say(string text)
+        private void Say(string text, float seconds = 3f)
         {
             if (!messageText) return;
             messageText.text = text;
-            messageTimer = 3f;
+            messageTimer = seconds;
         }
     }
 }
