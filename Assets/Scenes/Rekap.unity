@@ -159,8 +159,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: ea02ff4de10e4254ba446e80cb529bc4, type: 2}
+  m_sharedMaterial: {fileID: -259116777066470235, guid: ea02ff4de10e4254ba446e80cb529bc4, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -315,8 +315,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: ea02ff4de10e4254ba446e80cb529bc4, type: 2}
+  m_sharedMaterial: {fileID: -259116777066470235, guid: ea02ff4de10e4254ba446e80cb529bc4, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -434,8 +434,6 @@ MonoBehaviour:
   star2Threshold: 1.25
   star3Threshold: 1.5
   levels: {fileID: 0}
-  perfectDishBonus: 5
-  failStreakPenalty: 5
   threeStarBonus: 0.1
   experimentBaseChance: 0.4
   experimentPityStep: 0.1
@@ -859,8 +857,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: ea02ff4de10e4254ba446e80cb529bc4, type: 2}
+  m_sharedMaterial: {fileID: -259116777066470235, guid: ea02ff4de10e4254ba446e80cb529bc4, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
